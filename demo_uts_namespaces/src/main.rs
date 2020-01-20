@@ -13,10 +13,18 @@ use nix::unistd::sethostname;
 const STACK_LENGTH: usize = 1024 * 1024;
 
 fn child_func(hostname: &String) -> isize {
+    // Change hostname in UTS namespace of child
     sethostname(hostname).expect("sethostname() failed");
+
     let uts = uname();
     println!("uts.nodename in child: {}", uts.nodename());
+
+    // Keep the namespace open for a while, by sleeping. This allows some
+    // experimentation --- for example, another process might join the
+    // namespace.
     thread::sleep_ms(100 * 1000);
+
+    // Terminates child.
     return 0;
 }
 
@@ -29,6 +37,8 @@ fn main() {
 
     let mut child_stack: [u8; STACK_LENGTH] = [0; STACK_LENGTH];
 
+    // Create a child that has its own UTS namespace; the child commences
+    // execution in `child_func` above.
     let pid = clone(
         Box::new(|| child_func(&args[1])),
         &mut child_stack,
@@ -38,8 +48,11 @@ fn main() {
     .expect("clone() failed");
     println!("PID of child created by clone(): {}", pid);
 
+    // Give child time to change its hostname.
     thread::sleep_ms(1 * 1000);
 
+    // Display the hostname in parent's UTS namespace. This will be different
+    // from the hostname in child's UTS namespace.
     let uts = uname();
     println!("uts.nodename in parent: {}", uts.nodename());
 
