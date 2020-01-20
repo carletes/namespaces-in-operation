@@ -26,7 +26,4 @@ fn main() {
     let prog_c = CString::new(args[0].as_bytes()).expect("CString::new(prog) failed");
     let prog_args_c = CString::new(args[2..]).expect("CString::new(prog_args) failed");
     execvp(&prog_c, &[&prog_args_c]).expect("exec() failed");
-
-    // execvp(argv[2], &argv[2]);      /* Execute a command in namespace */
-    // errExit("execvp");
 }
