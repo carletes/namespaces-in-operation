@@ -1,6 +1,7 @@
 use std::env;
 use std::process;
 use std::thread;
+use std::time::Duration;
 
 extern crate nix;
 
@@ -22,7 +23,7 @@ fn child_func(hostname: &String) -> isize {
     // Keep the namespace open for a while, by sleeping. This allows some
     // experimentation --- for example, another process might join the
     // namespace.
-    thread::sleep_ms(100 * 1000);
+    thread::sleep(Duration::from_secs(100));
 
     // Terminates child.
     return 0;
@@ -49,7 +50,7 @@ fn main() {
     println!("PID of child created by clone(): {}", pid);
 
     // Give child time to change its hostname.
-    thread::sleep_ms(1 * 1000);
+    thread::sleep(Duration::from_secs(1));
 
     // Display the hostname in parent's UTS namespace. This will be different
     // from the hostname in child's UTS namespace.
