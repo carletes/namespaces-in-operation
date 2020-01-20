@@ -1,0 +1,6 @@
+[workspace]
+
+members = [
+  "demo_uts_namespaces",
+  "ns_exec",
+]
