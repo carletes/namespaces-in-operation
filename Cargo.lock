@@ -96,6 +96,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "pidns_init_sleep"
+version = "0.1.0"
+dependencies = [
+ "nix",
+]
+
+[[package]]
 name = "strsim"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

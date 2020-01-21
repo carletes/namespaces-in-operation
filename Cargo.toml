@@ -3,5 +3,6 @@
 members = [
   "demo_uts_namespaces",
   "ns_exec",
+  "pidns_init_sleep",
   "unshare",
 ]
