@@ -1,8 +1,9 @@
-[workspace]
+[package]
+name = "namespaces-in-operation"
+version = "0.1.0"
+authors = ["Carlos Valiente <carlos@pepelabs.net>"]
+edition = "2018"
 
-members = [
-  "demo_uts_namespaces",
-  "ns_exec",
-  "pidns_init_sleep",
-  "unshare",
-]
+[dependencies]
+clap = "2.33.0"
+nix = "0.17.0"
