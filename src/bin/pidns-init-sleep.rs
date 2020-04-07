@@ -27,7 +27,7 @@ fn child_func(mount_point: &String) -> isize {
     println!("Mounted procfs at {}", mount_point);
 
     let args_owned: Vec<CString> =
-        vec![CString::new("sleep").unwrap(), CString::new("600").unwrap()];
+        vec![CString::new("sleep").unwrap(), CString::new("1000").unwrap()];
     let args_exec: Vec<&CStr> = args_owned.iter().map(CString::as_c_str).collect();
     execvp(&args_exec[0], &args_exec).expect("execvp() failed");
 

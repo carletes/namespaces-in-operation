@@ -1,0 +1,10 @@
+[book]
+title = "Namespaces in operation"
+authors = ["Michael Kerrisk", "Carlos Valiente"]
+description = "Experiments with Linux namespaces in Rust, following Michael Kerrisk's series on LWN"
+src = "docs"
+language = "en"
+
+[build]
+build-dir = "book"
+create-missing = false
