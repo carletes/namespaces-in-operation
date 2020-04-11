@@ -1,5 +1,15 @@
 use clap::{crate_version, App, Arg};
 use nix::sched::{clone, CloneFlags};
+use nix::sys::signal::Signal;
+use nix::unistd::execvp;
+use std::ffi::{CStr, CString};
+
+fn child_func(args: &[&CStr]) -> isize {
+    execvp(&args[0], &args).expect("exec() failed");
+    0
+}
+
+const STACK_LENGTH: usize = 1024 * 1024;
 
 fn main() {
     let matches = App::new("ns-child-exec")
@@ -73,5 +83,29 @@ fn main() {
     }
     if matches.is_present("verbose") {
         verbose = true;
+    }
+
+    let mut child_stack: [u8; STACK_LENGTH] = [0; STACK_LENGTH];
+
+    let cmd = matches.value_of("cmd").unwrap();
+    let mut args_exec_owned: Vec<CString> = vec![CString::new(cmd).unwrap()];
+    if matches.is_present("arg") {
+        matches
+            .values_of("arg")
+            .unwrap()
+            .for_each(|a| args_exec_owned.push(CString::new(a).unwrap()));
+    }
+    let args_exec: Vec<&CStr> = args_exec_owned.iter().map(CString::as_c_str).collect();
+
+    let pid = clone(
+        Box::new(|| child_func(&args_exec)),
+        &mut child_stack,
+        flags,
+        Some(Signal::SIGCHLD as i32),
+    )
+    .expect("clone() failed");
+
+    if verbose {
+        println!("ns-ns-child-exec: PID of child created by clone is {}", pid);
     }
 }

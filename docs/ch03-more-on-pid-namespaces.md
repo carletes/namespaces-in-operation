@@ -30,13 +30,12 @@ The `ns-child-exec` program uses the `clone()` system call to create a
 child process; the child then executes the given command with the optional
 arguments. The main purpose of the options is to specify new namespaces
 that should be created as part of the `clone()` call. For example, the
-`-p` option causes the child to be created in a new PID namespace, as in
-the following example:
+`--pid` option causes the child to be created in a new PID namespace,
+as in the following example:
 
 ```text
-$ su                  # Need privilege to create a PID namespace
-Password:
-# ./ns_child_exec -p sh -c 'echo $$'
+$ cargo build
+$ sudo ./target/debug/ns-child-exec --pid -- sh -c 'echo $$'
 1
 ```
 
