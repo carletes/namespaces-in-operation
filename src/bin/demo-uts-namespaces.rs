@@ -1,15 +1,12 @@
-use std::env;
-use std::process;
-use std::thread;
-use std::time::Duration;
-
-extern crate nix;
-
 use nix::sched::{clone, CloneFlags};
 use nix::sys::signal::Signal;
 use nix::sys::utsname::uname;
 use nix::sys::wait::waitpid;
 use nix::unistd::sethostname;
+use std::env;
+use std::process;
+use std::thread;
+use std::time::Duration;
 
 const STACK_LENGTH: usize = 1024 * 1024;
 

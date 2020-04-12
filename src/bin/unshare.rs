@@ -1,7 +1,4 @@
-#[macro_use]
-extern crate clap;
-
-use clap::{App, Arg};
+use clap::{crate_version, App, Arg};
 use nix::sched::{unshare, CloneFlags};
 use nix::unistd::execvp;
 use std::ffi::{CStr, CString};
