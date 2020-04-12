@@ -1,13 +1,10 @@
+use nix::sched::{setns, CloneFlags};
+use nix::unistd::execvp;
 use std::env;
 use std::ffi::{CStr, CString};
 use std::fs::OpenOptions;
 use std::os::unix::io::AsRawFd;
 use std::process;
-
-extern crate nix;
-
-use nix::sched::{setns, CloneFlags};
-use nix::unistd::execvp;
 
 fn main() {
     let args: Vec<String> = env::args().collect();

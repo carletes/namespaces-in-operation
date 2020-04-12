@@ -2,14 +2,14 @@
 
 One use of PID namespaces is to implement a package of processes (a container)
 that behaves like a self-contained Linux system. A key part of a traditional
-system &mdash; and likewise a PID namespace container &mdash; is the `init``
+system &mdash; and likewise a PID namespace container &mdash; is the `init`
 process. Thus, we'll look at the special role of the `init` process in a PID
 namespace, and note one or two areas where it differs from the traditional
 `init` process. In addition, we'll look at some other details of the
 namespaces API as it applies to PID namespaces.
 
 
-## The PID namespace init process
+## The PID namespace `init` process
 
 The first process created inside a PID namespace gets a process ID of 1
 within the namespace. This process has a similar role to the `init` process
@@ -71,7 +71,7 @@ init$
 (Note the use of `--` in the call to `ns-child-exec`, so that all remaining
 arguments, including `--verbose`, are passed to `simple-init`).
 
-The `init$ prompt` indicates that the `simple-init` program is ready to
+The `init$` prompt indicates that the `simple-init` program is ready to
 read and execute a shell command.
 
 We'll now use the two programs we've presented so far in conjunction with
@@ -86,10 +86,10 @@ it becomes an orphan (i.e., `getppid()` returns 1); once the child becomes
 an orphan, it terminates. The parent and the child print messages so that we
 can see when the two processes terminate and when the child becomes an orphan.
 
-In order to see what that our `simple-init` program reaps the orphaned
-child process, we'll employ that program's `-v` option, which causes it
-to produce verbose messages about the children that it creates and the
-terminated children whose status it reaps:
+In order to see what that our `simple-init` program reaps the orphaned child
+process, we'll employ both programs' `--verbose` option, which causes both
+`ns-child-exec` and `simple-init` to produce verbose messages about the
+children that they create and the terminated children whose status they reap:
 
 ```text
 $ sudo ./target/debug/ns-child-exec --pid --verbose -- ./target/debug/simple-init --verbose
@@ -133,16 +133,17 @@ for the PID namespace `init` process in all of the usual circumstances
 (e.g., hardware exceptions, terminal-generated signals such as `SIGTTOU`,
 and expiration of a timer).
 
-Signals can also (subject to the usual permission checks) be sent to the
-PID namespace `init` process by processes in ancestor PID namespaces. Again,
-only the signals for which the `init` process has established a handler can
-be sent, with two exceptions: `SIGKILL` and `SIGSTOP`. When a process in an
-ancestor PID namespace sends these two signals to the `init` process, they
-are forcibly delivered (and can't be caught). The `SIGSTOP` signal stops the
-`init` process; `SIGKILL` terminates it. Since the `init` process is essential
-to the functioning of the PID namespace, if the `init` process is terminated
-by `SIGKILL` (or it terminates for any other reason), the kernel terminates
-all other processes in the namespace by sending them a `SIGKILL` signal.
+Signals can also ([subject to the usual permission checks][kill]) be
+sent to the PID namespace `init` process by processes in ancestor PID
+namespaces. Again, only the signals for which the `init` process has
+established a handler can be sent, with two exceptions: `SIGKILL` and
+`SIGSTOP`. When a process in an ancestor PID namespace sends these two signals
+to the `init` process, they are forcibly delivered (and can't be caught). The
+`SIGSTOP` signal stops the `init` process; `SIGKILL` terminates it. Since
+the `init` process is essential to the functioning of the PID namespace,
+if the `init` process is terminated by `SIGKILL` (or it terminates for any
+other reason), the kernel terminates all other processes in the namespace
+by sending them a `SIGKILL` signal.
 
 Normally, a PID namespace will also be destroyed when its `init` process
 terminates. However, there is an unusual corner case: the namespace won't be
@@ -172,18 +173,21 @@ shell commands, we can perform this task from the command line, using the
 `mount` command:
 
 ```text
-$ sudo ./target/debug/ns-child-exec --pid --mount --verbose -- ./target/debug /simple-init --verbose
-ns-child-exec: PID of child created by clone is 11478
+$ sudo ./target/debug/ns-child-exec --pid --mount --verbose -- ./target/debug/simple-init --verbose
+ns-child-exec: PID of child created by clone is 3086
         init: my PID is 1
-init$ mount -t proc proc /proc
+init$ mount --make-slave /proc
         init: Created child 2
         init: SIGCHLD handler: PID 2 terminated
-init$ ps a
+init$ mount -t proc proc /proc
         init: Created child 3
-  PID TTY      STAT   TIME COMMAND
-    1 pts/3    S      0:00 ./target/debug/simple-init --verbose
-    3 pts/3    R+     0:00 ps a
         init: SIGCHLD handler: PID 3 terminated
+init$ ps a
+        init: Created child 4
+  PID TTY      STAT   TIME COMMAND
+    1 pts/2    S      0:00 ./target/debug/simple-init --verbose
+    4 pts/2    R+     0:00 ps a
+        init: SIGCHLD handler: PID 4 terminated
 init$
 ```
 
@@ -197,6 +201,13 @@ running `simple-init`) inside a separate mount namespace. As a consequence,
 the `mount` command does not affect the `/proc` mount seen by processes
 outside the namespace.
 
+The call to `mount --make-slave proc` before the call to `mount -t proc proc
+/proc` is needed in order to avoid clobbering the parent's procfs. On an
+Ubuntu 18.04 install (and possibly in other current Linux distributions),
+mount propagation across namespaces is enabled by default; without the
+`mount --make-slave /proc` command, changes to the `/proc` mount point in
+the child namespace would be propagated to its parent namespace, and that
+would mess up the state of the system considerably.
 
 ## unshare() and setns()
 
@@ -213,8 +224,8 @@ the first such child will become the `init` process for the namespace.
 The `setns()` system call now supports PID namespaces:
 
 ```text
-    setns(fd, 0);   /* Second argument can be CLONE_NEWPID to force a
-                       check that 'fd' refers to a PID namespace */
+setns(fd, 0);   /* Second argument can be CLONE_NEWPID to force a
+                   check that 'fd' refers to a PID namespace */
 ```
 
 The `fd` argument is a file descriptor that identifies a PID namespace that
@@ -224,14 +235,13 @@ in the target namespace. As with `unshare()`, `setns()` does not move the
 caller to the PID namespace; instead, children that are subsequently created
 by the caller will be placed in the namespace.
 
-We can use an enhanced version of the [`ns-exec.rs`][ns-exec] program
-that we presented in the first chapter in this series to demonstrate some
-aspects of using `setns()` with PID namespaces that appear surprising until
-we understand what is going on. The new program, [`ns-run.rs`][ns-run],
-has the following syntax:
+We can use an enhanced version of the `ns-exec` program that we presented
+in the first chapter in this series to demonstrate some aspects of using
+`setns()` with PID namespaces that appear surprising until we understand what
+is going on. The new program, [`ns-run.rs`][ns-run], has the following syntax:
 
 ```text
-ns-run [-f] [-n /proc/PID/ns/FILE]... command [arguments]
+ns-run [--fork] [--ns /proc/PID/ns/FILE]... command [arguments]
 ```
 
 The program uses `setns()` to join the namespaces specified by the
@@ -244,7 +254,7 @@ in a new PID namespace in the usual manner, with verbose logging so that
 we are informed when it reaps child processes:
 
 ```text
-# ./ns_child_exec -p ./simple_init -v
+$ sudo ./target/debug/ns-child-exec --pid -- ./target/debug/simple-init -v
         init: my PID is 1
 init$
 ```
@@ -254,15 +264,14 @@ to execute our orphan program. This will have the effect of creating two
 processes in the PID namespace governed by `simple-init`:
 
 ```text
-# ps -C sleep -C simple_init
-  PID TTY          TIME CMD
-9147 pts/8    00:00:00 simple_init
-# ./ns_run -f -n /proc/9147/ns/pid ./orphan
-Parent (PID=2) created child with PID 3
-Parent (PID=2; PPID=0) terminating
-#
-Child  (PID=3) now an orphan (parent PID=1)
-Child  (PID=3) terminating
+$ ps aux | grep simple-init | grep -v ns-child-exec | grep -v grep
+root     10883  0.0  0.0   4456   688 pts/4    S+   17:30   0:00 ./target/debug/simple-init -v
+$ sudo ./target/debug/ns-run --ns=/proc/10883/ns/pid --fork ./target/debug/orphan
+Parent (PID: 2) created child with PID 3
+Parent (PID: 2, PPID:0) terminating
+$
+Child (PID: 3) now an orphan (parent PID: 1)
+Child (PID: 3) terminating
 ```
 
 Looking at the output from the "Parent" process (PID 2) created when the
@@ -277,9 +286,7 @@ The following diagram shows the relationships of the various processes before
 the `orphan` "Parent" process terminates. The arrows indicate parent-child
 relationships between processes.
 
-```text
-xxx Missing image!
-```
+<img src="https://static.lwn.net/images/2013/namespaces/pidns_orphan_1.png" />
 
 Returning to the window running the `simple-init` program, we see the
 following output:
@@ -295,9 +302,7 @@ namespace. The following diagram shows the processes and their relationships
 after the `orphan` "Parent" process has terminated and before the "Child"
 terminates.
 
-```text
-xxx Missing image!
-```
+<img src="https://static.lwn.net/images/2013/namespaces/pidns_orphan_2.png" />
 
 It's worth emphasizing that `setns()` and `unshare()` treat PID namespaces
 specially. For other types of namespaces, these system calls do change the
@@ -313,8 +318,9 @@ process's PID namespace membership is determined when the process is created,
 and (unlike other types of namespace membership) cannot be changed thereafter.
 
 
+[kill]: http://man7.org/linux/man-pages/man2/kill.2.html#DESCRIPTION
 [ns-child-exec]: ../src/bin/ns-child-exec.rs
-[simple-init]: ../src/bin/simple-init.rs
-[orphan]: ../src/bin/orphan.rs
 [ns-exec]: ../src/bin/ns-exec.rs
 [ns-run]: ../src/bin/ns-run.rs
+[orphan]: ../src/bin/orphan.rs
+[simple-init]: ../src/bin/simple-init.rs
