@@ -1,8 +1,10 @@
 use clap::{crate_version, App, Arg};
 use nix::sched::{clone, CloneFlags};
 use nix::sys::signal::Signal;
+use nix::sys::wait::waitpid;
 use nix::unistd::execvp;
 use std::ffi::{CStr, CString};
+use std::process;
 
 fn child_func(args: &[&CStr]) -> isize {
     execvp(&args[0], &args).expect("exec() failed");
@@ -106,6 +108,14 @@ fn main() {
     .expect("clone() failed");
 
     if verbose {
-        println!("ns-ns-child-exec: PID of child created by clone is {}", pid);
+        println!("ns-child-exec: PID of child created by clone is {}", pid);
     }
+
+    // Parent process: Wait for child.
+    waitpid(pid, None).expect("waitpid() failed");
+
+    if verbose {
+        println!("ns-child-exec: Terminating");
+    }
+    process::exit(0);
 }

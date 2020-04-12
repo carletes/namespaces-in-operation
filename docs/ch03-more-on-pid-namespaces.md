@@ -63,9 +63,13 @@ Thus, for example, we can use the `ns-child-exec` program in conjunction with
 `simple-init` to fire up an `init` process that runs in a new PID namespace:
 
 ```text
-# ./ns_child_exec -p ./simple_init
+$ sudo ./target/debug/ns-child-exec --pid -- ./target/debug/simple-init --verbose
+        init: my PID is 1
 init$
 ```
+
+(Note the use of `--` in the call to `ns-child-exec`, so that all remaining
+arguments, including `--verbose`, are passed to `simple-init`).
 
 The `init$ prompt` indicates that the `simple-init` program is ready to
 read and execute a shell command.
@@ -88,17 +92,18 @@ to produce verbose messages about the children that it creates and the
 terminated children whose status it reaps:
 
 ```text
-# ./ns_child_exec -p ./simple_init -v
+$ sudo ./target/debug/ns-child-exec --pid --verbose -- ./target/debug/simple-init --verbose
+ns-child-exec: PID of child created by clone is 10863
         init: my PID is 1
-init$ ./orphan
-        init: created child 2
-Parent (PID=2) created child with PID 3
-Parent (PID=2; PPID=1) terminating
+init$ ./target/debug/orphan
+        init: Created child 2
+Parent (PID: 2) created child with PID 3
+Parent (PID: 2, PPID:1) terminating
         init: SIGCHLD handler: PID 2 terminated
-init$                   # simple_init prompt interleaved with output from child
-Child  (PID=3) now an orphan (parent PID=1)
-Child  (PID=3) terminating
+Child (PID: 3) now an orphan (parent PID: 1)
+Child (PID: 3) terminating
         init: SIGCHLD handler: PID 3 terminated
+init$
 ```
 
 In the above output, the indented messages prefixed with `init:` are printed
@@ -167,12 +172,19 @@ shell commands, we can perform this task from the command line, using the
 `mount` command:
 
 ```text
-# ./ns_child_exec -p -m ./simple_init
+$ sudo ./target/debug/ns-child-exec --pid --mount --verbose -- ./target/debug /simple-init --verbose
+ns-child-exec: PID of child created by clone is 11478
+        init: my PID is 1
 init$ mount -t proc proc /proc
+        init: Created child 2
+        init: SIGCHLD handler: PID 2 terminated
 init$ ps a
+        init: Created child 3
   PID TTY      STAT   TIME COMMAND
-    1 pts/8    S      0:00 ./simple_init
-    3 pts/8    R+     0:00 ps a
+    1 pts/3    S      0:00 ./target/debug/simple-init --verbose
+    3 pts/3    R+     0:00 ps a
+        init: SIGCHLD handler: PID 3 terminated
+init$
 ```
 
 The `ps a` command lists all processes accessible via `/proc`. In this
@@ -180,7 +192,7 @@ case, we see only two processes, reflecting the fact that there are only
 two processes running in the namespace.
 
 When running the `ns-child-exec` command above, we employed that program's
-`-m` option, which places the child that it creates (i.e., the process
+`--mount` option, which places the child that it creates (i.e., the process
 running `simple-init`) inside a separate mount namespace. As a consequence,
 the `mount` command does not affect the `/proc` mount seen by processes
 outside the namespace.
