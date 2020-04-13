@@ -231,35 +231,57 @@ $ echo '0 1000 1' > /proc/8496/uid_map
 -bash: echo: write error: Operation not permitted
 ```
 
-Furthermore, the number of lines that may be written to the file is currently
-limited to five (an arbitrary limit that may be increased in the future).
+Furthermore, the number of lines that may be written to the file is currentl
+limited to 340 (as of Linux 4.15), and the number of bytes written to it
+must be less than the system page size.
 
 The `/proc/PID/uid_map` file is owned by the user ID that created the
 namespace, and is writeable only by that user (or a privileged user). In
 addition, all of the following requirements must be met:
 
-    The writing process must have the CAP_SETUID (CAP_SETGID for gid_map) capability in the user namespace of the process PID.
+* The writing process must have the `CAP_SETUID` (`CAP_SETGID` for `gid_map`)
+  capability in the user namespace of the process PID.
+* Regardless of capabilities, the writing process must be in either the
+  user namespace of the process PID or inside the (immediate) parent user
+  namespace of the process PID.
 
-    Regardless of capabilities, the writing process must be in either the user namespace of the process PID or inside the (immediate) parent user namespace of the process PID.
+One of the following must be true:
 
-    One of the following must be true:
+* The data written to `uid_map` (`gid_map`) consists of a single line that
+  maps (only) the writing process's effective user ID (group ID) in the parent
+  user namespace to a user ID (group ID) in the user namespace. This rule
+  allows the initial process in a user namespace (i.e., the child created by
+  `clone()`) to write a mapping for its own user ID (group ID).
+* The process has the `CAP_SETUID` (`CAP_SETGID` for `gid_map`) capability in
+  the parent user namespace. Such a process can define mappings to arbitrary
+  user IDs (group IDs) in the parent user namespace. As we noted earlier,
+  the initial process in a new user namespace has no capabilities in the
+  parent namespace. Thus, only a process in the parent namespace can write
+  a mapping that maps arbitrary IDs in the parent user namespace.
 
-        The data written to uid_map (gid_map) consists of a single line that maps (only) the writing process's effective user ID (group ID) in the parent user namespace to a user ID (group ID) in the user namespace. This rule allows the initial process in a user namespace (i.e., the child created by clone()) to write a mapping for its own user ID (group ID).
-
-        The process has the CAP_SETUID (CAP_SETGID for gid_map) capability in the parent user namespace. Such a process can define mappings to arbitrary user IDs (group IDs) in the parent user namespace. As we noted earlier, the initial process in a new user namespace has no capabilities in the parent namespace. Thus, only a process in the parent namespace can write a mapping that maps arbitrary IDs in the parent user namespace.
+If, as we saw in the previous example, the writing process does not have
+the `CAP_SETGID` capability in the _parent_ process, then use of the
+[`setgroups(2)`][setgroups] system call must first be denied (by writing
+`deny` to `/proc/PID/setgroups`) before writing to `gid_map`.
 
 
 ## Capabilities, `execve()`, and user ID 0
 
-In an earlier article in this series, we developed the ns_child_exec program. This program uses clone() to create a child process in new namespaces specified by command-line options and then executes a shell command in the child process.
+In an earlier chapter, we developed the [`ns-child-exec.rs`][ns-child-exec]
+program. This program uses `clone()` to create a child process in new
+namespaces specified by command-line options, and then executes a shell
+command in the child process.
 
-Suppose that we use this program to execute a shell in a new user namespace and then within that shell we try to define the user ID mapping for the new user namespace. In doing so, we run into a problem:
+Suppose that we use this program to execute a shell in a new user namespace,
+and then within that shell we try to define the user ID mapping for the
+new user namespace. In doing so, we run into a problem:
 
     $ ./ns_child_exec -U  bash
     $ echo '0 1000 1' > /proc/$$/uid_map       # $$ is the PID of the shell
     bash: echo: write error: Operation not permitted
 
-This error occurs because the shell has no capabilities inside the new user namespace, as can be seen from the following commands:
+This error occurs because the shell has no capabilities inside the new user
+namespace, as can be seen from the following commands:
 
     $ id -u         # Verify that user ID and group ID are not mapped
     65534
@@ -270,15 +292,27 @@ This error occurs because the shell has no capabilities inside the new user name
     CapPrm: 0000000000000000
     CapEff: 0000000000000000
 
-The problem occurred at the execve() call that executed the bash shell: when a process with non-zero user IDs performs an execve(), the process's capability sets are cleared. (The capabilities(7) manual page details the treatment of capabilities during an execve().)
+The problem occurred at the `execve()` call that executed the Bash shell:
+when a process with non-zero user IDs performs an `execve()`, the process's
+capability sets are cleared. (The [capabilities(7)][capabilities] manual
+page details the treatment of capabilities during an `execve()`.)
 
-To avoid this problem, it is necessary to create a user ID mapping inside the user namespace before performing the execve(). This is not possible with the ns_child_exec program; we need a slightly enhanced version of the program that does allow this.
+To avoid this problem, it is necessary to create a user ID mapping inside
+the user namespace before performing the `execve()`. This is not possible
+with the `ns-child-exec` program; we need a slightly enhanced version of
+the program that does allow this.
 
-The userns_child_exec.c program performs the same task as the ns_child_exec program, and has the same command-line interface, except that it allows two additional command-line options, -M and -G. These options accept string arguments that are used to define user and group ID maps for the new user namespace. For example, the following command maps both user ID 1000 and group ID 1000 to 0 in the new user namespace:
+The [`userns-child-exec.rs`][userns-child-exec] program performs the
+same task as the `ns-child-exec` program, and has the same command-line
+interface, except that it allows two additional command-line options, `-M` and
+`-G`. These options accept string arguments that are used to define user and
+group ID maps for the new user namespace. For example, the following command
+maps both user ID 1000 and group ID 1000 to 0 in the new user namespace:
 
     $ ./userns_child_exec -U -M '0 1000 1' -G '0 1000 1' bash
 
- This time, updating the mapping files succeeds, and we see that the shell has the expected user ID, group ID, and capabilities:
+This time, updating the mapping files succeeds, and we see that the shell
+has the expected user ID, group ID, and capabilities:
 
     $ id -u
     0
@@ -289,14 +323,39 @@ The userns_child_exec.c program performs the same task as the ns_child_exec prog
     CapPrm: 0000001fffffffff
     CapEff: 0000001fffffffff
 
-There are some subtleties to the implementation of the userns_child_exec program. First, either the parent process (i.e., the caller of clone()) or the new child process could update the user ID and group ID maps of the new user namespace. However, following the rules above, the only kind of mapping that the child process could define would be one that maps just its own effective user ID. If we want to define arbitrary user and group ID mappings in the child, then that must be done by the parent process. Furthermore, the parent process must have suitable capabilities, namely CAP_SETUID, CAP_SETGID, and (to ensure that the parent has the permissions needed to open the mapping files) CAP_DAC_OVERRIDE.
+There are some subtleties to the implementation of the `userns-child-exec`
+program. First, either the parent process (i.e., the caller of `clone()`) or
+the new child process could update the user ID and group ID maps of the new
+user namespace. However, following the rules above, the only kind of mapping
+that the child process could define would be one that maps just its own
+effective user ID. If we want to define arbitrary user and group ID mappings
+in the child, then that must be done by the parent process. Furthermore,
+the parent process must have suitable capabilities, namely `CAP_SETUID`,
+`CAP_SETGID`, and (to ensure that the parent has the permissions needed to
+open the mapping files) `CAP_DAC_OVERRIDE`.
 
-Furthermore, the parent must ensure that it updates the mapping files before the child calls execve() (otherwise we have exactly the problem described above, where the child will lose capabilities during the execve()). To do this, the two processes employ a pipe to ensure the required synchronization; comments in the program source code give full details.
-Viewing user and group ID mappings
+Furthermore, the parent must ensure that it updates the mapping files before
+the child calls `execve()` (otherwise we have exactly the problem described
+above, where the child will lose capabilities during the `execve())`. To do
+this, the two processes employ a pipe to ensure the required synchronization;
+comments in the program source code give full details.
 
-The examples so far showed the use of /proc/PID/uid_map and /proc/PID/gid_map files for defining a mapping. These files can also be used to view the mappings governing a process. As when writing to these files, the second (ID-outside-ns) value is interpreted according to which process is opening the file. If the process opening the file is in the same user namespace as the process PID, then ID-outside-ns is defined with respect to the parent user namespace. If the process opening the file is in a different user namespace, then ID-outside-ns is defined with respect to the user namespace of the process opening the file.
 
- We can illustrate this by creating a couple of user namespaces running shells, and examining the uid_map files of the processes in the namespaces. We begin by creating a new user namespace with a process running a shell:
+## Viewing user and group ID mappings
+
+The examples so far showed the use of `/proc/PID/uid_map` and
+`/proc/PID/gid_map` files for defining a mapping. These files can also be
+used to view the mappings governing a process. As when writing to these
+files, the second (`ID-outside-ns`) value is interpreted according to which
+process is opening the file. If the process opening the file is in the same
+user namespace as the process PID, then `ID-outside-ns` is defined with
+respect to the parent user namespace. If the process opening the file is
+in a different user namespace, then `ID-outside-ns` is defined with respect
+to the user namespace of the process opening the file.
+
+We can illustrate this by creating a couple of user namespaces running shells,
+and examining the `uid_map` files of the processes in the namespaces. We
+begin by creating a new user namespace with a process running a shell:
 
     $ id -u            # Display effective user ID
     1000
@@ -308,7 +367,8 @@ The examples so far showed the use of /proc/PID/uid_map and /proc/PID/gid_map fi
     $ id -u            # Mapping gives this process an effective user ID of 0
     0
 
-Now suppose we switch to another terminal window and create a sibling user namespace that employs different user and group ID mappings:
+Now suppose we switch to another terminal window and create a sibling user
+namespace that employs different user and group ID mappings:
 
     $ ./userns_child_exec -U -M '200 1000 1' -G '200 1000 1' bash
     $ cat /proc/self/uid_map
@@ -318,34 +378,43 @@ Now suppose we switch to another terminal window and create a sibling user names
     $ echo $$          # Show shell's PID for later reference
     2535
 
-Continuing in the second terminal window, which is running in the second user namespace, we view the user ID mapping of the process in the other user namespace:
+Continuing in the second terminal window, which is running in the second
+user namespace, we view the user ID mapping of the process in the other
+user namespace:
 
     $ cat /proc/2465/uid_map
              0        200          1
 
-The output of this command shows that user ID 0 in the other user namespace maps to user ID 200 in this namespace. Note that the same command produced different output when executed in the other user namespace, because the kernel generates the ID-outside-ns value according to the user namespace of the process that is reading from the file.
+The output of this command shows that user ID 0 in the other user namespace
+maps to user ID 200 in this namespace. Note that the same command produced
+different output when executed in the other user namespace, because the
+kernel generates the `ID-outside-ns` value according to the user namespace
+of the process that is reading from the file.
 
-If we switch back to the first terminal window, and display the user ID mapping file for the process in the second user namespace, we see the converse mapping:
+If we switch back to the first terminal window, and display the user ID
+mapping file for the process in the second user namespace, we see the
+converse mapping:
 
     $ cat /proc/2535/uid_map
            200          0          1
 
- Again, the output here is different from the same command when executed in the second user namespace, because the ID-outside-ns value is generated according to the user namespace of the process that is reading from the file. Of course, in the initial namespace, user ID 0 in the first namespace and user ID 200 in the second namespace both map to user ID 1000. We can verify this by executing the following commands in a third shell window inside the initial user namespace:
+Again, the output here is different from the same command when executed in
+the second user namespace, because the `ID-outside-ns` value is generated
+according to the user namespace of the process that is reading from the
+file. Of course, in the initial namespace, user ID 0 in the first namespace
+and user ID 200 in the second namespace both map to user ID 1000. We can
+verify this by executing the following commands in a third shell window
+inside the initial user namespace:
 
     $ cat /proc/2465/uid_map
              0       1000          1
     $ cat /proc/2535/uid_map
            200       1000          1
 
-Concluding remarks
 
-In this article, we've looked at the basics of user namespaces: creating a user namespace, using user and group ID map files, and the interaction of user namespaces and capabilities.
-
-As we noted in an earlier article, one of the motivations for implementing user namespaces is to give non-root applications access to functionality that was formerly limited to the root user. In traditional UNIX systems, various pieces of functionality have been limited to the root user in order to prevent unprivileged users from manipulating the runtime environment of privileged programs, which could affect the operation of those programs in unexpected or undesirable ways.
-
-A user namespace allows a process (that is unprivileged outside the namespace) to have root privileges while at the same time limiting the scope of that privilege to the namespace, with the result that the process cannot manipulate the runtime environment of privileged programs in the wider system. In order to use these root privileges meaningfully, we need to combine user namespaces with other types of namespaces—that topic will form the subject of the next article in this series.
-
-
-[demo-userns]: ../src/bin/demo-userns.rs
 [capabilities]: http://man7.org/linux/man-pages/man7/capabilities.7.html
+[demo-userns]: ../src/bin/demo-userns.rs
+[ns-child-exec]: ../src/bin/ns-child-exec.rs
+[setgroups]: http://man7.org/linux/man-pages/man2/setgroups.2.html
 [user-namespaces]: http://man7.org/linux/man-pages/man7/user_namespaces.7.html
+[userns-child-exec]: ../src/bin/userns-child-exec.rs
