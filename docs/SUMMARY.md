@@ -7,3 +7,5 @@
 - [PID namespaces](ch02-pid-namespaces.md)
 
 - [More on PID namespaces](ch03-more-on-pid-namespaces.md)
+
+- [User namespaces](ch04-user-namespaces.md)
