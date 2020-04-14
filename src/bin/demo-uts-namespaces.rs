@@ -23,7 +23,7 @@ fn child_func(hostname: &String) -> isize {
     thread::sleep(Duration::from_secs(100));
 
     // Terminates child.
-    return 0;
+    0
 }
 
 fn main() {

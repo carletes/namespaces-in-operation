@@ -115,7 +115,7 @@ fn main() {
         let cmd = cmd.trim();
 
         // Ignore empty commands.
-        if cmd.len() == 0 {
+        if cmd.is_empty() {
             continue;
         }
 

@@ -9,7 +9,7 @@ use std::fs::{create_dir_all, remove_dir};
 use std::os::unix::process::parent_id;
 use std::process;
 
-fn child_func(mount_point: &String) -> isize {
+fn child_func(mount_point: &str) -> isize {
     println!("child_func(): PID:  {}", process::id());
     println!("child_func(): PPID: {}", parent_id());
 
@@ -26,8 +26,10 @@ fn child_func(mount_point: &String) -> isize {
     .expect("mount() failed");
     println!("Mounted procfs at {}", mount_point);
 
-    let args_owned: Vec<CString> =
-        vec![CString::new("sleep").unwrap(), CString::new("1000").unwrap()];
+    let args_owned: Vec<CString> = vec![
+        CString::new("sleep").unwrap(),
+        CString::new("1000").unwrap(),
+    ];
     let args_exec: Vec<&CStr> = args_owned.iter().map(CString::as_c_str).collect();
     execvp(&args_exec[0], &args_exec).expect("execvp() failed");
 

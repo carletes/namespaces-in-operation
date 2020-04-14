@@ -29,10 +29,11 @@ fn main() {
         .arg(Arg::with_name("arg").multiple(true))
         .get_matches();
 
-    let mut do_fork = false;
-    if matches.is_present("fork") {
-        do_fork = true;
-    }
+    let do_fork = if matches.is_present("fork") {
+        true
+    } else {
+        false
+    };
 
     // Get descriptor for namespace.
     let fd = OpenOptions::new()
