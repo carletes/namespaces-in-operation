@@ -56,10 +56,10 @@ fn main() {
         )
         .get_matches();
 
-    if matches.is_present("verbose") {
-        unsafe {
-            VERBOSE = true;
-        }
+    let verbose = matches.is_present("verbose");
+
+    unsafe {
+        VERBOSE = verbose;
     }
 
     let mut sa_flags = SaFlags::empty();
@@ -74,10 +74,10 @@ fn main() {
 
     unsafe {
         sigaction(Signal::SIGCHLD, &sa).expect("sigaction(SIGCHLD) failed");
+    }
 
-        if VERBOSE {
-            println!("\tinit: my PID is {}", process::id());
-        }
+    if verbose {
+        println!("\tinit: my PID is {}", process::id());
     }
 
     // Performing terminal operations while not being the foreground
@@ -101,11 +101,9 @@ fn main() {
         // Read a shell command; exit on end of file .
         let mut cmd = String::new();
         if io::stdin().read_line(&mut cmd).unwrap() == 0 {
-            unsafe {
-                if VERBOSE {
-                    print!("\n\tinit: Exiting");
-                    io::stdout().flush().unwrap();
-                }
+            if verbose {
+                print!("\n\tinit: Exiting");
+                io::stdout().flush().unwrap();
             }
             println!();
             process::exit(0);
@@ -143,8 +141,8 @@ fn main() {
                             args_owned.iter().map(CString::as_c_str).collect();
                         execvp(&args_exec[0], &args_exec).expect("execvp() failed");
                     }
-                    ForkResult::Parent { child } => unsafe {
-                        if VERBOSE {
+                    ForkResult::Parent { child } => {
+                        if verbose {
                             println!("\tinit: Created child {}", child);
                         }
 
@@ -155,7 +153,7 @@ fn main() {
                         // program is the foreground process group for the
                         // terminal.
                         tcsetpgrp(0, getpgrp()).expect("tcsetpgrp() failed");
-                    },
+                    }
                 }
             }
         }
