@@ -9,3 +9,5 @@
 - [More on PID namespaces](ch03-more-on-pid-namespaces.md)
 
 - [User namespaces](ch04-user-namespaces.md)
+
+- [More on user namespaces](ch05-more-on-user-namespaces.md)
