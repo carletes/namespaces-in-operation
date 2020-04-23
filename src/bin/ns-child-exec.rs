@@ -63,8 +63,6 @@ fn main() {
         .get_matches();
 
     let mut flags = CloneFlags::empty();
-    let mut verbose = false;
-
     if matches.is_present("ipc") {
         flags.set(CloneFlags::CLONE_NEWIPC, true)
     }
@@ -83,9 +81,8 @@ fn main() {
     if matches.is_present("user") {
         flags.set(CloneFlags::CLONE_NEWUSER, true)
     }
-    if matches.is_present("verbose") {
-        verbose = true;
-    }
+
+    let verbose = matches.is_present("verbose");
 
     let mut child_stack: [u8; STACK_LENGTH] = [0; STACK_LENGTH];
 
