@@ -4,6 +4,8 @@ use nix::sys::signal::Signal;
 use nix::sys::wait::waitpid;
 use nix::unistd::{close, execvp, pipe, read};
 use std::ffi::{CStr, CString};
+use std::fs::OpenOptions;
+use std::io::Write;
 use std::os::unix::io::RawFd;
 use std::process;
 
@@ -18,33 +20,18 @@ use std::process;
 // of course inconvenient for command-line use. Thus, we permit the
 // use of commas to delimit records in this string, and replace them
 // with newlines before writing the string to the file.
-//
-// static void
-// update_map(char *mapping, char *map_file)
-// {
-// int fd, j;
-// size_t map_len;     [> Length of 'mapping' <]
-//
-// Replace commas in mapping string with newlines
-//
-// map_len = strlen(mapping);
-// for (j = 0; j < map_len; j++)
-// if (mapping[j] == ',')
-// mapping[j] = '\n';
-//
-// fd = open(map_file, O_RDWR);
-// if (fd == -1) {
-// fprintf(stderr, "open %s: %s\n", map_file, strerror(errno));
-// exit(EXIT_FAILURE);
-// }
-//
-// if (write(fd, mapping, map_len) != map_len) {
-// fprintf(stderr, "write %s: %s\n", map_file, strerror(errno));
-// exit(EXIT_FAILURE);
-// }
-//
-// close(fd);
-// }
+
+fn update_map(mapping: &str, map_file: &str) {
+    // Replace commas in mapping string with newlines
+    let mapping = String::from(mapping).replace(",", "\n");
+
+    let mut f = OpenOptions::new()
+        .write(true)
+        .open(map_file)
+        .expect(&format!("Error opening {}", map_file));
+    f.write(mapping.as_bytes())
+        .expect(&format!("Error writing to {}", map_file));
+}
 
 fn child_func(args: &[&CStr], reader: RawFd, writer: RawFd) -> isize {
     // Wait until the parent has updated the UID and GID mappings. See
@@ -190,17 +177,16 @@ fn main() {
     }
 
     // Update the UID and GID maps in the child.
-    //
-    // if (uid_map != NULL) {
-    // snprintf(map_path, PATH_MAX, "/proc/%ld/uid_map",
-    // (long) child_pid);
-    // update_map(uid_map, map_path);
-    // }
-    // if (gid_map != NULL) {
-    // snprintf(map_path, PATH_MAX, "/proc/%ld/gid_map",
-    // (long) child_pid);
-    // update_map(gid_map, map_path);
-    // }
+
+    if matches.is_present("uid-map") {
+        let map_path = format!("/proc/{}/uid_map", pid);
+        update_map(matches.value_of("uid-map").unwrap(), &map_path);
+    }
+
+    if matches.is_present("gid-map") {
+        let map_path = format!("/proc/{}/gid_map", pid);
+        update_map(matches.value_of("gid-map").unwrap(), &map_path);
+    }
 
     // Close the write end of the pipe, to signal to the child that we
     // have updated the UID and GID maps.
