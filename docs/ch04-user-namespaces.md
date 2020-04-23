@@ -224,7 +224,7 @@ rules are as follows.
 Defining a mapping is a one-time operation per namespace: We can
 perform only a single write (that may contain multiple newline-delimited
 records) to a `uid_map` file of exactly one of the processes in the user
-namespace. If we try to write again to the `uid_map` file. we fail:
+namespace. If we try to write again to the `uid_map` file, we fail:
 
 ```text
 $ echo '0 1000 1' > /proc/8496/uid_map
@@ -276,21 +276,25 @@ Suppose that we use this program to execute a shell in a new user namespace,
 and then within that shell we try to define the user ID mapping for the
 new user namespace. In doing so, we run into a problem:
 
-    $ ./ns_child_exec -U  bash
-    $ echo '0 1000 1' > /proc/$$/uid_map       # $$ is the PID of the shell
-    bash: echo: write error: Operation not permitted
+```text
+$ cargo run --bin ns-child-exec -- --user /bin/bash
+$ echo '0 1000 1' > /proc/$$/uid_map
+bash: echo: write error: Operation not permitted
+```
 
 This error occurs because the shell has no capabilities inside the new user
 namespace, as can be seen from the following commands:
 
-    $ id -u         # Verify that user ID and group ID are not mapped
-    65534
-    $ id -g
-    65534
-    $ cat /proc/$$/status | egrep 'Cap(Inh|Prm|Eff)'
-    CapInh: 0000000000000000
-    CapPrm: 0000000000000000
-    CapEff: 0000000000000000
+```text
+$ id -u
+65534
+$ id -g
+65534
+$ cat /proc/$$/status | egrep 'Cap(Inh|Prm|Eff)'
+CapInh: 0000000000000000
+CapPrm: 0000000000000000
+CapEff: 0000000000000000
+```
 
 The problem occurred at the `execve()` call that executed the Bash shell:
 when a process with non-zero user IDs performs an `execve()`, the process's
@@ -314,14 +318,17 @@ maps both user ID 1000 and group ID 1000 to 0 in the new user namespace:
 This time, updating the mapping files succeeds, and we see that the shell
 has the expected user ID, group ID, and capabilities:
 
-    $ id -u
-    0
-    $ id -g
-    0
-    $ cat /proc/$$/status | egrep 'Cap(Inh|Prm|Eff)'
-    CapInh: 0000000000000000
-    CapPrm: 0000001fffffffff
-    CapEff: 0000001fffffffff
+```text
+$ cargo run --bin userns-child-exec -- --user --uid-map '0 1000 1' --gid-map '0 1000 1' -- /bin/bash
+$ id -u
+0
+$ id -g
+0
+$ cat /proc/$$/status | egrep 'Cap(Inh|Prm|Eff)'
+CapInh: 0000000000000000
+CapPrm: 0000003fffffffff
+CapEff: 0000003fffffffff
+```
 
 There are some subtleties to the implementation of the `userns-child-exec`
 program. First, either the parent process (i.e., the caller of `clone()`) or

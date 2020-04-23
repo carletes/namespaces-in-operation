@@ -2,7 +2,7 @@ use clap::{crate_version, App, Arg};
 use nix::sched::{clone, CloneFlags};
 use nix::sys::signal::Signal;
 use nix::sys::wait::waitpid;
-use nix::unistd::{close, execvp, pipe, read};
+use nix::unistd::{close, execvp, pipe, read, Pid};
 use std::ffi::{CStr, CString};
 use std::fs::OpenOptions;
 use std::io::Write;
@@ -31,6 +31,16 @@ fn update_map(mapping: &str, map_file: &str) {
         .expect(&format!("Error opening {}", map_file));
     f.write(mapping.as_bytes())
         .expect(&format!("Error writing to {}", map_file));
+}
+
+fn disable_setgroups(pid: &Pid) {
+    let path = format!("/proc/{}/setgroups", pid);
+    let mut f = OpenOptions::new()
+        .write(true)
+        .open(&path)
+        .expect(&format!("Error opening {}", path));
+    f.write(b"deny\n")
+        .expect(&format!("Error writing to {}", path));
 }
 
 fn child_func(args: &[&CStr], reader: RawFd, writer: RawFd) -> isize {
@@ -184,6 +194,9 @@ fn main() {
     }
 
     if matches.is_present("gid-map") {
+        // Disable system call `setgroups(2)`, otherwise writing to the
+        // `gid_map` will fail.
+        disable_setgroups(&pid);
         let map_path = format!("/proc/{}/gid_map", pid);
         update_map(matches.value_of("gid-map").unwrap(), &map_path);
     }
