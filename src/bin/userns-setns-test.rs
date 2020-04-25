@@ -24,8 +24,8 @@ fn test_setns(pname: &str, fd: RawFd) {
 
     // Attempt to join the user namespace specified by `fd`.
     match setns(fd, CloneFlags::CLONE_NEWUSER) {
-        Ok(()) => println!("{}: setns() succeeded", pname),
-        Err(err) => println!("!{}: setns() failed: {}", pname, err),
+        Ok(()) => println!("{}: setns({}) succeeded", pname, fd),
+        Err(err) => println!("{}: setns({}) failed: {}", pname, fd, err),
     }
 }
 
@@ -47,11 +47,11 @@ fn main() {
     }
 
     // Open user namespace file specified on command line.
-    let fd = OpenOptions::new()
+    let file = OpenOptions::new()
         .read(true)
         .open(&args[1])
-        .expect("open() failed")
-        .as_raw_fd();
+        .expect("open() failed");
+    let fd = file.as_raw_fd();
 
     // Create child process in new user namespace.
     let mut child_stack: [u8; STACK_SIZE] = [0; STACK_SIZE];
@@ -62,6 +62,9 @@ fn main() {
         Some(Signal::SIGCHLD as i32),
     )
     .expect("clone() failed");
+
+    // Test whether `setns()` is possible from the parent user namespace.
+    test_setns("parent", fd);
 
     waitpid(pid, None).expect("waitpid() failed");
 

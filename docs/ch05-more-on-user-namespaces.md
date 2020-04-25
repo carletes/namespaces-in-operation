@@ -74,37 +74,32 @@ the target namespace.
 
 For our demonstration, we use this program in conjunction with the
 [`userns-child-exec.rs`][userns-child-exec] program developed in the previous
-article in this series. First, we use that program to start a shell (we use
-`ksh`, simply to create a distinctively named process) running in a new
-user namespace:
+chapter. First, we use that program to start a shell (we use `bash`, simply
+to create a distinctively named process) running in a new user namespace:
 
-    $ id -u
-    1000
-    $ readlink /proc/$$/ns/user       # Obtain ID for initial namespace
-    user:[4026531837]
-    $ ./userns_child_exec -U -M '0 1000 1' -G '0 1000 1' ksh
-    ksh$ echo $$                      # Obtain PID of shell
-    528
-    ksh$ readlink /proc/$$/ns/user    # This shell is in a new namespace
-    user:[4026532318]
+```text
+$ id -u
+1000
+$ readlink /proc/$$/ns/user
+user:[4026531837]
+$ cargo run --bin userns-child-exec -- --user --uid-map '0 1000 1' --gid-map '0 1000 1' -- /bin/bash
+$ echo $$
+4340
+$ readlink /proc/$$/ns/user
+user:[4026532631]
+```
 
 Now, we switch to a separate terminal window, to a shell running in the
 initial namespace, and run our test program:
 
-    $ readlink /proc/$$/ns/user       # Verify that we are in parent namespace
-    user:[4026531837]
-    $ ./userns_setns_test /proc/528/ns/user
-    parent: readlink("/proc/self/ns/user") ==> user:[4026531837]
-    parent: setns() succeeded
-
-    child:  readlink("/proc/self/ns/user") ==> user:[4026532319]
-    child:  setns() failed: Operation not permitted
-
-The following program shows the parental relationships between the various
-processes (black arrows) and namespaces (blue arrows) that have been created:
-
 ```text
-Missing image
+$ readlink /proc/$$/ns/user           # Verify that we are in parent namespace
+user:[4026531837]
+$ cargo run --bin userns-setns-test /proc/4340/ns/user
+parent: readlink("/proc/self/ns/user"): user:[4026531837]
+parent: setns() succeeded
+child: readlink("/proc/self/ns/user"): user:[4026532630]
+child: setns() failed: EPERM: Operation not permitted
 ```
 
 Looking at the output of the `readlink` commands at the start of each
@@ -113,13 +108,13 @@ shell session, we can see that the parent process created when the
 (4026531837). (As noted in an earlier chapetr, these numbers are i-node
 numbers for symbolic links in the `/proc/PID/ns directory`.) As such, by
 rule three above, since the parent process had the same effective user ID
-(1000) as the process that created the new user namespace (4026532318), it
+(1000) as the process that created the new user namespace (4026532631), it
 had all capabilities in that namespace, including `CAP_SYS_ADMIN`; thus the
 `setns()` call in the parent succeeds.
 
 On the other hand, the child process created by `userns-setns-test` is in
-a different namespace (4026532319) &mdash; in effect, a sibling namespace
-of the namespace where the `ksh process is running. As such, the second of
+a different namespace (4026532630) &mdash; in effect, a sibling namespace
+of the namespace where the `bash process is running. As such, the second of
 the rules described above does not apply, because that namespace is not an
 ancestor of namespace 4026532318. Thus, the child process does not have the
 `CAP_SYS_ADMIN` capability in that namespace and the `setns()` call fails.
