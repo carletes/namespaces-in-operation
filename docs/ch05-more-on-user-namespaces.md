@@ -148,43 +148,51 @@ clone(child_func, stackp, CLONE_NEWUSER | CLONE_NEWUTS, arg);
 
 We can use our `userns-child-exec` program to perform a `clone()` call
 equivalent to the above and execute a shell in the child process. The
-following command specifies the creation of a new UTS namespace (-u), and a
-new user namespace (-U) in which both user and group ID 1000 are mapped to 0:
+following command specifies the creation of a new UTS namespace and a new
+user namespace in which both user and group ID 1000 are mapped to 0:
 
-    $ uname -n           # Display hostname for later reference
-    antero
-    $ ./userns_child_exec -u -U -M '0 1000 1' -G '0 1000 1' bash
+```text
+$ uname -n           # Display hostname for later reference
+rilke
+$ cargo run --bin userns-child-exec -- --user --uts --uid-map '0 1000 1' --gid-map '0 1000 1' -- bash
+```
 
 As expected, the shell process has a full set of permitted and effective
 capabilities:
 
-    $ id -u              # Show effective user and group ID of shell
-    0
-    $ id -g
-    0
-    $ cat /proc/$$/status | egrep 'Cap(Inh|Prm|Eff)'
-    CapInh: 0000000000000000
-    CapPrm: 0000001fffffffff
-    CapEff: 0000001fffffffff
+```text
+$ id -u
+0
+$ id -g
+0
+$ cat /proc/$$/status | egrep 'Cap(Inh|Prm|Eff)'
+CapInh: 0000000000000000
+CapPrm: 0000003fffffffff
+CapEff: 0000003fffffffff
+```
 
-In the above output, the hexadecimal value 1fffffffff represents a capability
-set in which all 37 of the currently available Linux capabilities are enabled.
+In the above output, the hexadecimal value 3fffffffff represents a capability
+set in which all of the currently available Linux capabilities are enabled.
 
 We can now go on to modify the hostname &mdash; one of the global resources
 isolated by UTS namespaces &mdash; using the standard hostname command; that
 operation requires the `CAP_SYS_ADMIN` capability. First, we set the hostname
 to a new value, and then we review that value with the `uname` command:
 
-    $ hostname bizarro     # Update hostname in this UTS namespace
-    $ uname -n             # Verify the change
-    bizarro
+```text
+$ hostname pepe     # Update hostname in this UTS namespace
+$ uname -n          # Verify the change
+pepe
+```
 
 Switching to another terminal window &mdash; one that is running in the
 initial UTS namespace &mdash; we then check the hostname in that UTS
 namespace:
 
-    $ uname -n             # Hostname in original UTS namespace is unchanged
-    antero
+```text
+$ uname -n          # Hostname in original UTS namespace is unchanged
+rilke
+```
 
 From the above output, we can see that the change of hostname in the child
 UTS namespace is not visible in the parent UTS namespace.
