@@ -164,8 +164,8 @@ Child: Capabilities (effective): {
 
 Now we switch to another terminal window, to a shell process running in
 another namespace &mdash; the parent user namespace of the process running
-demo_userns &mdash; and create a user ID mapping for the child process in
-the new user namespace created by `demo-userns`:
+`demo-userns` &mdash; and create a user ID mapping for the child process
+in the new user namespace created by `demo-userns`:
 
 ```text
 $ ps -C demo-userns -o 'pid uid comm     # Determine PID of clone child'
@@ -313,7 +313,9 @@ interface, except that it allows two additional command-line options, `-M` and
 group ID maps for the new user namespace. For example, the following command
 maps both user ID 1000 and group ID 1000 to 0 in the new user namespace:
 
-    $ ./userns_child_exec -U -M '0 1000 1' -G '0 1000 1' bash
+```text
+$ cargo run --bin userns-child-exec -- --user --uid-map '0 1000 1' --gid-map '0 1000 1' -- /bin/bash
+```
 
 This time, updating the mapping files succeeds, and we see that the shell
 has the expected user ID, group ID, and capabilities:
@@ -364,33 +366,37 @@ We can illustrate this by creating a couple of user namespaces running shells,
 and examining the `uid_map` files of the processes in the namespaces. We
 begin by creating a new user namespace with a process running a shell:
 
-    $ id -u            # Display effective user ID
-    1000
-    $ ./userns_child_exec -U -M '0 1000 1' -G '0 1000 1' bash
-    $ echo $$          # Show shell's PID for later reference
-    2465
-    $ cat /proc/2465/uid_map
-             0       1000          1
-    $ id -u            # Mapping gives this process an effective user ID of 0
-    0
+```text
+$ id -u
+1000
+$ cargo run --bin userns-child-exec -- --user --uid-map '0 1000 1' --gid-map '0 1000 1' -- /bin/bash
+$ echo $$
+1534
+$ cat /proc/1534/uid_map
+         0       1000          1
+$ id -u
+0
+```
 
 Now suppose we switch to another terminal window and create a sibling user
 namespace that employs different user and group ID mappings:
 
-    $ ./userns_child_exec -U -M '200 1000 1' -G '200 1000 1' bash
-    $ cat /proc/self/uid_map
-           200       1000          1
-    $ id -u            # Mapping gives this process an effective user ID of 200
-    200
-    $ echo $$          # Show shell's PID for later reference
-    2535
+```text
+$ cargo run --bin userns-child-exec -- --user --uid-map '200 1000 1' --gid-map '200 1000 1' -- /bin/bash
+$ id -u
+200
+$ echo $$
+1971
+```
 
 Continuing in the second terminal window, which is running in the second
 user namespace, we view the user ID mapping of the process in the other
 user namespace:
 
-    $ cat /proc/2465/uid_map
-             0        200          1
+```text
+$ cat /proc/1534/uid_map
+         0        200          1
+```
 
 The output of this command shows that user ID 0 in the other user namespace
 maps to user ID 200 in this namespace. Note that the same command produced
@@ -402,8 +408,10 @@ If we switch back to the first terminal window, and display the user ID
 mapping file for the process in the second user namespace, we see the
 converse mapping:
 
-    $ cat /proc/2535/uid_map
-           200          0          1
+```text
+$ cat /proc/1971/uid_map
+       200          0          1
+```
 
 Again, the output here is different from the same command when executed in
 the second user namespace, because the `ID-outside-ns` value is generated
@@ -413,10 +421,12 @@ and user ID 200 in the second namespace both map to user ID 1000. We can
 verify this by executing the following commands in a third shell window
 inside the initial user namespace:
 
-    $ cat /proc/2465/uid_map
-             0       1000          1
-    $ cat /proc/2535/uid_map
-           200       1000          1
+```text
+$ cat /proc/1534/uid_map
+         0       1000          1
+$ cat /proc/1971/uid_map
+       200       1000          1
+```
 
 
 [capabilities]: http://man7.org/linux/man-pages/man7/capabilities.7.html
