@@ -143,7 +143,9 @@ all capabilities. The kernel then acts on all of the remaining `CLONE_NEW*`
 flags, creating corresponding new namespaces and making the child a member
 of all of those namespaces.
 
-Thus, for example, an unprivileged process can make a call of the following form to create a child process that is a member of both a new user namespace and a new UTS namespace:
+Thus, for example, an unprivileged process can make a call of the following
+form to create a child process that is a member of both a new user namespace
+and a new UTS namespace:
 
 ```text
 clone(child_func, stackp, CLONE_NEWUSER | CLONE_NEWUTS, arg);
@@ -227,10 +229,10 @@ by IPC, network, PID, and UTS namespaces.
 Furthermore, the child process would not be able to perform privileged
 operations that require capabilities that are not (currently) governed by
 namespaces. Thus, for example, the child could not do things such as raising
-its hard resource limits, setting the system time, setting process priorities,
-or loading kernel modules. All of those operations require capabilities
-that sit outside the user namespace hierarchy; in effect, those operations
-require that the caller have capabilities in the initial user namespace.
+its hard resource limits, setting process priorities, or loading kernel
+modules. All of those operations require capabilities that sit outside
+the user namespace hierarchy; in effect, those operations require that the
+caller have capabilities in the initial user namespace.
 
 By isolating the effect of capabilities to namespaces, user namespaces
 thus deliver on the promise of safely allowing unprivileged users access to
