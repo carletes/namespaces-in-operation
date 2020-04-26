@@ -13,3 +13,5 @@
 - [User namespaces](ch04-user-namespaces.md)
 
 - [More on user namespaces](ch05-more-on-user-namespaces.md)
+
+- [Network namespaces](ch06-network-namespaces.md)
