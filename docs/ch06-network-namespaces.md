@@ -9,8 +9,8 @@ instance. Network namespaces entered the kernel in 2.6.24.
 
 As with the others, network namespaces are created by passing a flag to
 the `clone()` system call: `CLONE_NEWNET`. From the command line, though,
-it is convenient to use the `ip` networking configuration tool to set up
-and work with network namespaces. For example:
+it is convenient to use the [`ip`][iproute2] networking configuration tool
+to set up and work with network namespaces. For example:
 
 ```text
 # ip netns add netns1
@@ -23,12 +23,17 @@ we ran it as `root`, since creation of network namespaces requires the
 When the `ip` tool creates a network namespace, it will create a bind mount
 for it under `/var/run/netns`; that allows the namespace to persist even
 when no processes are running within it, and facilitates the manipulation
-of the namespace itself. Since network namespaces typically require a fair
-amount of configuration before they are ready for use, this feature will
-be appreciated by system administrators.
+of the namespace itself:
+
+```text
+$ ls -l /var/run/netns
+total 0
+-r--r--r-- 1 root root 0 May 11 12:07 netns1
+```
 
 The `ip netns exec` command can be used to run network management commands
-within the namespace:
+within the namespace. This command, for instance, lists the interfaces
+visible inside the namespace:
 
 ```text
 # ip netns exec netns1 ip link list
@@ -36,8 +41,7 @@ within the namespace:
     link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
 ```
 
-This command lists the interfaces visible inside the namespace. A network
-namespace can be removed with:
+A bind-mount reference to a network namespace can be removed with:
 
 ```text
 # ip netns delete netns1
@@ -45,7 +49,68 @@ namespace can be removed with:
 
 This command removes the bind mount referring to the given network
 namespace. The namespace itself, however, will persist for as long as any
-processes are running within it.
+processes are running within it (if there are no more processes running
+in it when its bind-mounted reference is deleted, the network namespace is
+deleted as well).
+
+
+### Low-level details
+
+Running the previous commands under the [`strace(1)`][strace] tool shows
+which system calls are done by the `ip` command-line tool in order to create
+a new network namespace:
+
+```text
+# strace -f ip netns add netns1
+[..]
+openat(AT_FDCWD, "/var/run/netns/netns1", O_RDONLY|O_CREAT|O_EXCL, 000) = 5
+close(5)                                = 0
+unshare(CLONE_NEWNET)                   = 0
+mount("/proc/self/ns/net", "/var/run/netns/netns1", 0x55a4c56f49a5, MS_BIND, NULL) = 0
+exit_group(0)                           = ?
++++ exited with 0 +++
+```
+
+Here the mount point `/var/run/netns/netns1` is created (as an empty
+file), and then the `ip` command creates a new network namespace with the
+`unshare()` system call. The file `/proc/self/ns/net` is then bind-mounted to
+`/var/run/netns/netns1`, so that the network namespace survives the life-time
+of the `ip` command.
+
+Now that we may refer to our new network namespace by its bind-mounted path
+`/var/run/netns/netns1`, we may execute processes in it (by passing an open
+file descriptor to the [`setns(2)`][setns] system call). The following is
+a trace of `/bin/true` running in the `netns1` network namespace:
+
+```text
+# strace -f ip netns exec netns1 /bin/true
+[..]
+openat(AT_FDCWD, "/var/run/netns/netns1", O_RDONLY|O_CLOEXEC) = 5
+setns(5, CLONE_NEWNET)                  = 0
+close(5)                                = 0
+[..]
+execve("/bin/true", ["/bin/true"], 0x7ffc1d304d98 /* 35 vars */) = 0
+[..]
+exit_group(0)                           = ?
++++ exited with 0 +++
+
+```
+
+Deleting the bind-mount-ed reference to this network namespace is done
+by unmounting the bind-mount reference to it at `/var/run/netns/netns1`
+(and removing the mount point file):
+
+```text
+# strace -f ip netns delete netns1
+[..]
+umount2("/var/run/netns/netns1", MNT_DETACH) = 0
+unlink("/var/run/netns/netns1")         = 0
+exit_group(0)                           = ?
++++ exited with 0 +++
+```
+
+As stated above, note that the network namespace will exist as long as
+there are processes running within it.
 
 
 ## Network namespace configuration
@@ -197,3 +262,8 @@ configurations all on a single box. Running sensitive services in more
 locked-down, firewall-restricted namespace is another. Obviously, container
 implementations also use network namespaces to give each container its own
 view of the network, untrammeled by processes outside of the container.
+
+
+[iproute2]: https://wiki.linuxfoundation.org/networking/iproute2
+[setns]: http://man7.org/linux/man-pages/man2/setns.2.html
+[strace]: http://man7.org/linux/man-pages/man1/strace.1.html
