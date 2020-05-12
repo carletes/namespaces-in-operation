@@ -11,7 +11,7 @@ The chapter on network namespaces is mostly an adaptation of [Ifeanyi
 Ubah's post][ifeanyi-post].
 
 The code presented here is a Rust rewrite of the original authors' sample
-programs.  All sample progams can be built using `cargo`:
+programs.  All sample programs can be built using `cargo`:
 
 ```text
 $ cargo build
