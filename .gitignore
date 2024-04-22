@@ -1,3 +1,5 @@
+/.cargo
 /.direnv/
+/.rustup
 /book
 /target/
