@@ -17,10 +17,9 @@ fn child_func(hostname: &String) -> isize {
     let uts = uname();
     println!("uts.nodename in child: {}", uts.nodename());
 
-    // Keep the namespace open for a while, by sleeping. This allows some
-    // experimentation --- for example, another process might join the
-    // namespace.
-    thread::sleep(Duration::from_secs(100));
+    let pause = 100;
+    println!("Keeping child process alive for {} seconds, in case you want to experiment with its namespace ...", pause);
+    thread::sleep(Duration::from_secs(pause));
 
     // Terminates child.
     0

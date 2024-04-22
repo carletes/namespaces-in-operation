@@ -113,7 +113,9 @@ rilke
 $ sudo ./target/debug/demo-uts-namespaces bizarro
 PID of child created by clone(): 6549
 uts.nodename in child: bizarro
+Keeping child process alive for 100 seconds, in case you want to experiment with its namespace ...
 uts.nodename in parent: rilke
+[..]
 ```
 
 As with most other namespaces (user namespaces are the exception), creating
