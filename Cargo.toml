@@ -2,7 +2,7 @@
 name = "namespaces-in-operation"
 version = "0.1.0"
 authors = ["Carlos Valiente <carlos@pepelabs.net>"]
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 caps = "0.3.4"
